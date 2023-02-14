@@ -475,7 +475,6 @@
             // 
             // comboBoxPorts
             // 
-            this.comboBoxPorts.Anchor = System.Windows.Forms.AnchorStyles.Right;
             this.comboBoxPorts.FormattingEnabled = true;
             this.comboBoxPorts.Location = new System.Drawing.Point(515, 6);
             this.comboBoxPorts.Name = "comboBoxPorts";

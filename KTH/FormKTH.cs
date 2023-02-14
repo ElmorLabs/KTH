@@ -671,7 +671,7 @@ namespace KTH {
 
                 serial_port_mutex.ReleaseMutex();
 
-                if(rx_buffer == null || (rx_buffer[0] != 0x0D || rx_buffer[0] != 0x04) || rx_buffer[1] != 0xEE) {
+                if(rx_buffer == null || (rx_buffer[0] != 0x0D && rx_buffer[0] != 0x04) || rx_buffer[1] != 0xEE) {
                     MessageBox.Show("Error communicating with KTH"); 
                     try {
                         serial_port.Close();
@@ -807,9 +807,46 @@ namespace KTH {
 
         private void WriteSpiFlash() {
 
+            // Read tc data
+
+            byte[][] tc_lut = new byte[4][];
+
+            try
+            {
+                tc_lut[0] = File.ReadAllBytes("tc_lut_k.bin");
+                tc_lut[1] = File.ReadAllBytes("tc_lut_e.bin");
+                tc_lut[2] = File.ReadAllBytes("tc_lut_j.bin");
+                tc_lut[3] = File.ReadAllBytes("tc_lut_t.bin");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Unable to find tc_lut files");
+                return;
+            }
+
+            if (MessageBox.Show("Are you sure you want to update the temperature look-up table?", "Warning", MessageBoxButtons.OKCancel) != DialogResult.OK)
+            {
+                return;
+            }
+
             // Check communication
-            if(!serial_port_mutex.WaitOne(1000)) {
+            if (!serial_port_mutex.WaitOne(1000)) {
                 MessageBox.Show("Couldn't get serial port mutex");
+                return;
+            }
+
+            // Turn off display
+            try
+            {
+                KTH_SendCmd(serial_port, new byte[] { UART_CMD_DISPLAY_UPD_OFF }, 0);
+
+                // Wait before sending more data
+                System.Threading.Thread.Sleep(1);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error disabling screen updates: " + ex.Message);
+                serial_port_mutex.ReleaseMutex();
                 return;
             }
 
@@ -818,11 +855,12 @@ namespace KTH {
 
             if(rx_buffer == null || rx_buffer[0] != 1) {
                 MessageBox.Show("Error erasing flash");
+                serial_port_mutex.ReleaseMutex();
                 return;
             }
 
             // Create data
-            List<byte> temp_list = new List<byte>();
+            /*List<byte> temp_list = new List<byte>();
             for(int tc_volt = -6600; tc_volt < 15000; tc_volt++) {
                 double Vcomp = tc_volt / 1000.0;
                 double Th = 0;
@@ -860,7 +898,6 @@ namespace KTH {
                 temp_list.Add((byte)(temp>>8));
             }
 
-
             for(int page = 0; page < (255 + temp_list.Count) / 256; page++) {
                 int retry = 9;
 
@@ -888,9 +925,9 @@ namespace KTH {
                         KTH_SendCmd(serial_port, tx_buffer, 0);
                         Thread.Sleep(sleep);*/
 
-                        if(temp_list.Count - 256 * page < 256) {
+                        /*if(temp_list.Count - 256 * page < 256) {
                             tx_len = temp_list.Count - 256 * page;
-                        }
+                        }*/
 
                         /*for(int i = 0; i < 256; i++) {
                             if(i < tx_len) {
@@ -912,7 +949,7 @@ namespace KTH {
                             rx_buffer = null;
                         }*/
 
-                        tx_buffer = new byte[4 + 256];
+                        /*tx_buffer = new byte[4 + 256];
                         tx_buffer[0] = 0x51;
                         tx_buffer[1] = 0;
                         tx_buffer[2] = (byte)page;
@@ -946,7 +983,7 @@ namespace KTH {
                             tx_buffer[i] = 0xFF;
                         }
                         serial_port.Write(tx_buffer, 0, tx_buffer.Length);*/
-                        Thread.Sleep(100);
+                        /*Thread.Sleep(100);
                         serial_port.DiscardInBuffer();
                     }
                     buttonUpdateLut.Refresh();
@@ -956,6 +993,71 @@ namespace KTH {
                     MessageBox.Show($"Error page #{page}");
                     break;
                 }
+            }*/
+
+            for (int tc = 0; tc < tc_lut.Length; tc++)
+            {
+
+                switch (tc)
+                {
+                    case 0: Console.Write("K"); break;
+                    case 1: Console.Write("E"); break;
+                    case 2: Console.Write("J"); break;
+                    case 3: Console.Write("T"); break;
+                }
+
+                int pages = (tc_lut[tc].Length + 255) / 256;
+
+                int errors = 0;
+
+                for (int page = 0; page < pages && errors == 0; page++)
+                {
+                    buttonUpdateLut.Text = ($"Program Page #{page}/{pages}... ");
+                    buttonUpdateLut.Refresh();
+
+                    // Write page
+                    rx_buffer = KTH_SendCmd(serial_port, new byte[] { 0x58 }, 1);
+
+                    if (rx_buffer != null && rx_buffer[0] == 1)
+                    {
+                        int addr = tc * 256 + page;
+
+                        byte[] data = new byte[3 + 256];
+                        data[0] = 0;
+                        data[1] = (byte)(addr);
+                        data[2] = (byte)(addr >> 8);
+
+                        int len = tc_lut[tc].Length - page * 256;
+                        if (len > 256) len = 256;
+                        Array.Copy(tc_lut[tc], page * 256, data, 3, len);
+
+                        rx_buffer = KTH_SendCmd(serial_port, data, 1);
+
+                    }
+
+                    if (rx_buffer == null || rx_buffer[0] != 1) {
+                        //Console.WriteLine($"Bad response TC{tc} page{page}");
+                        buttonUpdateLut.Text += "E";
+                        errors++;
+                    } else {
+                        buttonUpdateLut.Text += "OK";
+                    }
+
+                }
+            }
+
+            // Turn on display
+            try
+            {
+                KTH_SendCmd(serial_port, new byte[] { 0x41 }, 0);
+
+                // Wait before sending more data
+                System.Threading.Thread.Sleep(1);
+                Console.WriteLine("OK");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error enabling screen updates: " + ex.Message);
             }
 
 
