@@ -69,6 +69,7 @@
             this.checkBoxTc1 = new System.Windows.Forms.CheckBox();
             this.checkBoxTc2 = new System.Windows.Forms.CheckBox();
             this.buttonUpdateLut = new System.Windows.Forms.Button();
+            this.buttonHwinfo = new System.Windows.Forms.Button();
             this.tableLayoutPanel1.SuspendLayout();
             this.tableLayoutPanel2.SuspendLayout();
             this.tableLayoutPanel3.SuspendLayout();
@@ -513,7 +514,7 @@
             // 
             // buttonWriteToFile
             // 
-            this.buttonWriteToFile.Location = new System.Drawing.Point(658, 40);
+            this.buttonWriteToFile.Location = new System.Drawing.Point(584, 40);
             this.buttonWriteToFile.Name = "buttonWriteToFile";
             this.buttonWriteToFile.Size = new System.Drawing.Size(70, 23);
             this.buttonWriteToFile.TabIndex = 16;
@@ -526,7 +527,7 @@
             this.checkBoxTc1.AutoSize = true;
             this.checkBoxTc1.Checked = true;
             this.checkBoxTc1.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBoxTc1.Location = new System.Drawing.Point(561, 44);
+            this.checkBoxTc1.Location = new System.Drawing.Point(515, 33);
             this.checkBoxTc1.Name = "checkBoxTc1";
             this.checkBoxTc1.Size = new System.Drawing.Size(46, 17);
             this.checkBoxTc1.TabIndex = 17;
@@ -539,7 +540,7 @@
             this.checkBoxTc2.AutoSize = true;
             this.checkBoxTc2.Checked = true;
             this.checkBoxTc2.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBoxTc2.Location = new System.Drawing.Point(608, 44);
+            this.checkBoxTc2.Location = new System.Drawing.Point(515, 56);
             this.checkBoxTc2.Name = "checkBoxTc2";
             this.checkBoxTc2.Size = new System.Drawing.Size(46, 17);
             this.checkBoxTc2.TabIndex = 18;
@@ -557,11 +558,22 @@
             this.buttonUpdateLut.UseVisualStyleBackColor = true;
             this.buttonUpdateLut.Click += new System.EventHandler(this.buttonUpdateLut_Click);
             // 
+            // buttonHwinfo
+            // 
+            this.buttonHwinfo.Location = new System.Drawing.Point(658, 40);
+            this.buttonHwinfo.Name = "buttonHwinfo";
+            this.buttonHwinfo.Size = new System.Drawing.Size(70, 23);
+            this.buttonHwinfo.TabIndex = 20;
+            this.buttonHwinfo.Text = "HWInfo";
+            this.buttonHwinfo.UseVisualStyleBackColor = true;
+            this.buttonHwinfo.Click += new System.EventHandler(this.buttonHwinfo_Click);
+            // 
             // FormKTH
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(813, 477);
+            this.Controls.Add(this.buttonHwinfo);
             this.Controls.Add(this.buttonUpdateLut);
             this.Controls.Add(this.checkBoxTc2);
             this.Controls.Add(this.checkBoxTc1);
@@ -644,5 +656,6 @@
         private System.Windows.Forms.CheckBox checkBoxTc1;
         private System.Windows.Forms.CheckBox checkBoxTc2;
         private System.Windows.Forms.Button buttonUpdateLut;
+        private System.Windows.Forms.Button buttonHwinfo;
     }
 }

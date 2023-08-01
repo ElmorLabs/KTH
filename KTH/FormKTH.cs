@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -174,28 +175,75 @@ namespace KTH {
         }
 
         private void UpdateSerialPorts() {
+
             serial_ports = SerialPort.GetPortNames().ToList();
 
             comboBoxPorts.Items.Clear();
 
-            // https://stackoverflow.com/questions/2837985/getting-serial-port-information
-            using(var searcher = new ManagementObjectSearcher("SELECT * FROM WIN32_SerialPort")) {
-                foreach(string port in serial_ports) {
-                    bool found = false;
-                    foreach(ManagementObject queryObj in searcher.Get()) {
-                        if(queryObj["DeviceID"].ToString().Equals(port)) {
-                            string pnp_dev_id = queryObj["PNPDeviceID"].ToString();
-                            if(pnp_dev_id.StartsWith(EVC2_PNPID)) {
-                                comboBoxPorts.Items.Add(port + ": EVC2 Serial Port");
-                                comboBoxPorts.SelectedIndex = comboBoxPorts.Items.Count - 1;
-                            } else {
-                                comboBoxPorts.Items.Add(port + ": " + queryObj["Description"].ToString());
-                            }
-                            found = true;
-                        }
+            // Open registry to find matching CH340 USB-Serial ports
+
+            List<string> ch340_ports = new List<string>();
+            RegistryKey masterRegKey = null;
+
+            try
+            {
+                masterRegKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\USB\VID_1A86&PID_7523");
+            }
+            catch
+            {
+            }
+
+            if (masterRegKey != null)
+            {
+                foreach (string subKey in masterRegKey.GetSubKeyNames())
+                {
+                    // Name must contain either VCP or Serial to be valid. Process any entries NOT matching
+                    // Compare to subKey (name of RegKey entry)
+                    try
+                    {
+                        RegistryKey subRegKey = masterRegKey.OpenSubKey($"{subKey}\\Device Parameters");
+                        if (subRegKey == null) continue;
+
+                        string value = (string)subRegKey.GetValue("PortName");
+
+                        if (subRegKey.GetValueKind("PortName") != RegistryValueKind.String) continue;
+
+                        if (value != null) ch340_ports.Add(value);
                     }
-                    if(!found) {
-                        comboBoxPorts.Items.Add(port + ": Unknown Serial Port");
+                    catch
+                    {
+                        continue;
+                    }
+                }
+
+                masterRegKey.Close();
+            }
+
+            // https://stackoverflow.com/questions/2837985/getting-serial-port-information
+            using (var searcher = new ManagementObjectSearcher("SELECT * FROM WIN32_SerialPort")) {
+                foreach (string port in serial_ports) {
+                    bool found = false;
+                    if (ch340_ports.Contains(port))
+                    {
+                        comboBoxPorts.Items.Add(port + ": CH340 Serial Port");
+                        comboBoxPorts.SelectedIndex = comboBoxPorts.Items.Count - 1;
+                    } else {
+                        foreach (ManagementObject queryObj in searcher.Get()) {
+                            if (queryObj["DeviceID"].ToString().Equals(port)) {
+                                string pnp_dev_id = queryObj["PNPDeviceID"].ToString();
+                                if (pnp_dev_id.StartsWith(EVC2_PNPID)) {
+                                    comboBoxPorts.Items.Add(port + ": EVC2 Serial Port");
+                                    comboBoxPorts.SelectedIndex = comboBoxPorts.Items.Count - 1;
+                                } else {
+                                    comboBoxPorts.Items.Add(port + ": " + queryObj["Description"].ToString());
+                                }
+                                found = true;
+                            }
+                        }
+                        if (!found)
+                        {
+                            comboBoxPorts.Items.Add(port + ": Unknown Serial Port");
+                        }
                     }
                 }
             }
@@ -348,14 +396,36 @@ namespace KTH {
                     data_logger.WriteLine();
                 }
 
+                if(hwinfo_export)
+                {
+                    try
+                    {
+                        RegistryKey key;
+                        if (checkBoxTc1.Checked)
+                        {
+                            key = hwinfo_reg_key.OpenSubKey("Temp0", true);
+                            key.SetValue("Value", temp[0], RegistryValueKind.String);
+                        }
+                        if (checkBoxTc2.Checked)
+                        {
+                            key = hwinfo_reg_key.OpenSubKey("Temp1", true);
+                            key.SetValue("Value", temp[1], RegistryValueKind.String);
+                        }
+                    } catch { }
+                }
+
                 if(WriteToFileName.Length > 0) {
                     try {
                         string text = "";
                         if(checkBoxTc1.Checked) {
-                            text += temp[0].ToString("F1") + "°C " + (temp[0]*9/5f + 32).ToString("F1") + "°F" + Environment.NewLine;
+                            text += temp[0].ToString("F1") + "°C";// " + (temp[0]*9/5f + 32).ToString("F1") + "°F" + Environment.NewLine;
                         }
                         if(checkBoxTc2.Checked) {
-                            text += temp[1].ToString("F1") + "°C " + (temp[1] * 9 / 5f + 32).ToString("F1") + "°F" + Environment.NewLine;
+                            if(checkBoxTc1.Checked)
+                            {
+                                text += Environment.NewLine;
+                            }
+                            text += temp[1].ToString("F1") + "°C";// + (temp[1] * 9 / 5f + 32).ToString("F1") + "°F";
                         }
                         System.IO.File.WriteAllText(WriteToFileName, text);
                     } catch(Exception ex) {
@@ -1068,6 +1138,100 @@ namespace KTH {
 
         private void buttonUpdateLut_Click(object sender, EventArgs e) {
             WriteSpiFlash();
+        }
+
+        bool hwinfo_export = false;
+
+        public RegistryKey hwinfo_reg_key;
+        private const string HWINFO_REG_KEY = "Software\\HWiNFO64\\Sensors\\Custom";
+        private const string KTH_REG_KEY = "ElmorLabs KTH";
+
+        private void buttonHwinfo_Click(object sender, EventArgs e)
+        {
+            if (!hwinfo_export)
+            {
+                try
+                {
+                    hwinfo_reg_key = Registry.CurrentUser.OpenSubKey(HWINFO_REG_KEY, true);
+                    if (hwinfo_reg_key == null)
+                    {
+                        hwinfo_reg_key = Registry.CurrentUser.CreateSubKey(HWINFO_REG_KEY, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.Message);
+                }
+
+                if (hwinfo_reg_key == null)
+                {
+                    throw new Exception("Error accessing registry.");
+                }
+
+                try
+                {
+
+                    if (hwinfo_reg_key.OpenSubKey(KTH_REG_KEY) != null)
+                    {
+                        hwinfo_reg_key.DeleteSubKeyTree("");
+                    }
+
+                    hwinfo_reg_key = hwinfo_reg_key.CreateSubKey(KTH_REG_KEY);
+
+                    if (hwinfo_reg_key == null)
+                    {
+                        throw new Exception("Error accessing registry.");
+                    }
+
+
+
+                    RegistryKey key;
+                    if (checkBoxTc1.Checked)
+                    {
+                        key = hwinfo_reg_key.CreateSubKey("Temp0");
+                        if (key == null)
+                        {
+                            throw new Exception("Error accessing registry.");
+                        }
+                        key.SetValue("Name", "TC1", RegistryValueKind.String);
+                        key.SetValue("Value", "0", RegistryValueKind.String);
+
+                    }
+
+                    if (checkBoxTc2.Checked)
+                    {
+                        key = hwinfo_reg_key.CreateSubKey("Temp1");
+                        if (key == null)
+                        {
+                            throw new Exception("Error accessing registry.");
+                        }
+                        key.SetValue("Name", "TC2", RegistryValueKind.String);
+                        key.SetValue("Value", "0", RegistryValueKind.String);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.Message);
+                }
+
+                hwinfo_export = true;
+                checkBoxTc1.Enabled = false;
+                checkBoxTc2.Enabled = false;
+                buttonHwinfo.Text = "Stop";
+
+            }
+            else
+            {
+                try
+                {
+                    hwinfo_reg_key.DeleteSubKeyTree("");
+                } catch { }
+                hwinfo_export = false;
+                checkBoxTc1.Enabled = true;
+                checkBoxTc2.Enabled = true;
+                buttonHwinfo.Text = "HWInfo";
+
+            }
         }
     }
 }
